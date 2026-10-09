@@ -24,12 +24,15 @@ interface ClockConfig {
     showSeconds: boolean;
     showAmPm: boolean;
     langCode: string;
+    secondaryTimezone: string;
 }
 
 interface ClockElements {
     main: HTMLElement | null;
     date: HTMLElement | null;
     time: HTMLElement | null;
+    secondaryTime: HTMLElement | null;
+    secondaryDay: HTMLElement | null;
 }
 
 class Clock {
@@ -97,12 +100,16 @@ class Clock {
                 main: null,
                 date: null,
                 time: null,
+                secondaryTime: null,
+                secondaryDay: null,
             };
         }
         return {
             main: main as HTMLElement,
             date: document.querySelector(".clock--date"),
             time: document.querySelector(".clock--time"),
+            secondaryTime: document.querySelector(".clock--secondary-time"),
+            secondaryDay: document.querySelector(".clock--secondary-day"),
         };
     }
 
@@ -118,9 +125,7 @@ class Clock {
         }
     }
 
-    private updateTime(now: Date): void {
-        if (!this.config.showTime || !this.elements.time) return;
-
+    private timeFormat(): string {
         let timeFormat: string;
         if (this.config.timeFormat === "12") {
             if (this.config.showSeconds) {
@@ -137,6 +142,13 @@ class Clock {
                 ? TIME_FORMATS.TWENTY_FOUR_HOUR_SECONDS
                 : TIME_FORMATS.TWENTY_FOUR_HOUR;
         }
+        return timeFormat;
+    }
+
+    private updateTime(now: Date): void {
+        if (!this.config.showTime || !this.elements.time) return;
+
+        const timeFormat = this.timeFormat();
 
         try {
             const formattedTime = format(now, timeFormat, {
@@ -152,10 +164,69 @@ class Clock {
         }
     }
 
+    /**
+     * Wall-clock time in another IANA timezone as a local Date (so date-fns formats it
+     * like the main clock), plus the day difference with the local date.
+     */
+    private wallClockIn(
+        now: Date,
+        timeZone: string,
+    ): { wall: Date; days: number } {
+        // "MM/DD/YYYY, HH:mm:ss" in the target zone; hour12:false may yield "24" at midnight
+        const text = new Intl.DateTimeFormat("en-US", {
+            timeZone,
+            hour12: false,
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+        }).format(now);
+        const m = text.match(/(\d+)\/(\d+)\/(\d+),?\s+(\d+):(\d+):(\d+)/);
+        if (!m) {
+            throw new Error(`Unexpected date format: ${text}`);
+        }
+        const [, month, day, year, hour, minute, second] = m.map(Number);
+        const wall = new Date(year, month - 1, day, hour % 24, minute, second);
+        const dayStart = (d: Date): number =>
+            new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        const days = Math.round((dayStart(wall) - dayStart(now)) / 86_400_000);
+        return { wall, days };
+    }
+
+    private updateSecondaryTime(now: Date): void {
+        const timeZone = this.config.secondaryTimezone;
+        if (
+            !this.config.showTime ||
+            !timeZone ||
+            !this.elements.secondaryTime
+        ) {
+            return;
+        }
+        try {
+            const { wall, days } = this.wallClockIn(now, timeZone);
+            const formatted = format(wall, this.timeFormat(), {
+                locale: this.lang,
+            });
+            this.elements.secondaryTime.innerHTML =
+                this.config.timeFormat === "12"
+                    ? formatted.toLowerCase()
+                    : formatted;
+            if (this.elements.secondaryDay) {
+                this.elements.secondaryDay.innerHTML =
+                    days > 0 ? `+${days}` : days < 0 ? `${days}` : "";
+            }
+        } catch (error) {
+            console.error("Error formatting secondary time:", error);
+        }
+    }
+
     private render(): void {
         const now = new Date();
         this.updateDate(now);
         this.updateTime(now);
+        this.updateSecondaryTime(now);
     }
 
     public start(): void {
@@ -187,6 +258,7 @@ function initClock(
     kioskShowSeconds: boolean,
     kioskShowAmPm: boolean,
     kioskLangCode: string,
+    kioskSecondaryTimezone = "",
 ): Clock {
     const config: ClockConfig = {
         showDate: kioskShowDate,
@@ -196,6 +268,7 @@ function initClock(
         showSeconds: kioskShowSeconds,
         showAmPm: kioskShowAmPm,
         langCode: kioskLangCode,
+        secondaryTimezone: kioskSecondaryTimezone,
     };
 
     const clock = new Clock(config);

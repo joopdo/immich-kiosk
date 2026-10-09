@@ -11,6 +11,8 @@ show_am_pm: true # show am/pm when using 12 hour format
 show_date: false
 date_format: YYYY/MM/DD
 clock_source: client
+secondary_clock_timezone: "" # IANA timezone for an extra time line under the clock, e.g. Asia/Seoul
+secondary_clock_label: "" # text in front of it, e.g. "🇰🇷 서울" (empty = city name from the timezone)
 
 ## Kiosk behaviour
 duration: 60 # The duration a slide will be displayed (seconds).

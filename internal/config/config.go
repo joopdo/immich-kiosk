@@ -309,6 +309,11 @@ type Config struct {
 	DateFormat string `json:"dateFormat" yaml:"date_format" mapstructure:"date_format" query:"date_format" form:"date_format" default:"DD/MM/YYYY"`
 	// ClockSource source of clock time
 	ClockSource string `json:"clockSource" yaml:"clock_source" mapstructure:"clock_source" query:"clock_source" form:"clock_source" default:"client" lowercase:"true"`
+	// SecondaryClockTimezone IANA timezone for an extra, smaller time line under the clock (e.g. "Asia/Seoul"). Empty disables it.
+	// Not settable via URL: "/" is not allowed in URL params.
+	SecondaryClockTimezone string `json:"secondaryClockTimezone" yaml:"secondary_clock_timezone" mapstructure:"secondary_clock_timezone" default:""`
+	// SecondaryClockLabel text shown in front of the secondary time (e.g. "🇰🇷 서울"). Empty uses the city part of the timezone.
+	SecondaryClockLabel string `json:"secondaryClockLabel" yaml:"secondary_clock_label" mapstructure:"secondary_clock_label" default:""`
 
 	// Duration in seconds to display assets
 	Duration int `json:"duration" yaml:"duration" mapstructure:"duration" query:"duration" form:"duration" default:"60"`
@@ -735,6 +740,7 @@ func (c *Config) Load() error {
 	c.checkRedirects()
 	c.checkOffline()
 	c.checkBurnIn()
+	c.checkSecondaryClock()
 	c.checkFilterNewest()
 
 	return nil

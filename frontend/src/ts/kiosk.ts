@@ -72,6 +72,7 @@ type KioskData = {
     showSeconds: boolean;
     showAmPm: boolean;
     clockSource: "client" | "server";
+    secondaryClockTimezone: string;
     transition: string;
     showMoreInfo: boolean;
     showRedirects: boolean;
@@ -180,6 +181,7 @@ async function init(): Promise<void> {
             kioskData.showSeconds,
             kioskData.showAmPm,
             kioskData.langCode,
+            kioskData.secondaryClockTimezone,
         );
     }
 

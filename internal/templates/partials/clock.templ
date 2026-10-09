@@ -23,6 +23,37 @@ func clockDate(c config.Config) string {
 // clockTime returns the current time formatted according to the configuration settings.
 // Supports 12-hour (Kitchen) or 24-hour (15:04) format based on config.TimeFormat.
 func clockTime(c config.Config) string {
+	return strings.ToLower(time.Now().Format(clockTimeLayout(c)))
+}
+
+// secondaryClockTime returns the current time in the secondary timezone, using the same
+// layout as the main clock, plus a day offset ("+1"/"-1") when the date there differs.
+func secondaryClockTime(c config.Config) (string, string) {
+	loc, err := time.LoadLocation(c.SecondaryClockTimezone)
+	if err != nil {
+		return "", ""
+	}
+	now := time.Now()
+	there := now.In(loc)
+	localDay := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	thereDay := time.Date(there.Year(), there.Month(), there.Day(), 0, 0, 0, 0, time.UTC)
+	return strings.ToLower(there.Format(clockTimeLayout(c))), dayOffset(int(thereDay.Sub(localDay).Hours() / 24))
+}
+
+// dayOffset renders a day difference as "+1"/"-1", or "" for the same day.
+func dayOffset(days int) string {
+	switch {
+	case days > 0:
+		return fmt.Sprintf("+%d", days)
+	case days < 0:
+		return fmt.Sprintf("%d", days)
+	default:
+		return ""
+	}
+}
+
+// clockTimeLayout returns the Go time layout for the configured time format.
+func clockTimeLayout(c config.Config) string {
 	const (
 		twelveHourWithWithAmPm          = time.Kitchen
 		twelveHourWithSeconds           = "3:04:05"
@@ -56,7 +87,7 @@ func clockTime(c config.Config) string {
 		}
 	}
 
-	return strings.ToLower(time.Now().Format(clockTimeFormat))
+	return clockTimeFormat
 }
 
 // Clock renders a clock component showing date and/or time based on configuration settings.
@@ -67,10 +98,23 @@ templ Clock(requestConfig config.Config) {
 	if requestConfig.ShowTime {
 		<div class="clock--time">{ clockTime(requestConfig) }</div>
 	}
+	if requestConfig.ShowTime && requestConfig.SecondaryClockTimezone != "" {
+		{{ secondaryTime, secondaryDay := secondaryClockTime(requestConfig) }}
+		@SecondaryClock(requestConfig.SecondaryClockLabel, secondaryTime, secondaryDay)
+	}
+}
+
+// SecondaryClock renders the smaller time line for the secondary timezone.
+templ SecondaryClock(label, timeText, day string) {
+	<div class="clock--secondary">
+		<span class="clock--secondary-label">{ label }</span>
+		<span class="clock--secondary-time">{ timeText }</span>
+		<span class="clock--secondary-day">{ day }</span>
+	</div>
 }
 
 // ClockContainer renders a clock html
-templ ClockContainer(source string, theme string, showTime, showSeconds bool) {
+templ ClockContainer(source string, theme string, showTime, showSeconds bool, secondaryTimezone, secondaryLabel string) {
 	<div
 		id="clock"
 		class={ fmt.Sprintf("clock--theme-%s", theme) }
@@ -86,5 +130,8 @@ templ ClockContainer(source string, theme string, showTime, showSeconds bool) {
 	>
 		<div class="clock--date"></div>
 		<div class="clock--time"></div>
+		if showTime && secondaryTimezone != "" {
+			@SecondaryClock(secondaryLabel, "", "")
+		}
 	</div>
 }

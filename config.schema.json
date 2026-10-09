@@ -40,6 +40,12 @@
     "clock_source": {
       "type": "string"
     },
+    "secondary_clock_timezone": {
+      "type": "string"
+    },
+    "secondary_clock_label": {
+      "type": "string"
+    },
     "duration": {
       "type": "integer"
     },

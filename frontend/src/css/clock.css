@@ -28,6 +28,21 @@
     font-size: 3rem;
 }
 
+.clock--secondary {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+    font-size: 1.25rem;
+    opacity: 0.7;
+}
+
+.clock--secondary-day {
+    font-size: 0.8em;
+}
+
 /* In sleep mode */
 
 .sleep {
@@ -57,6 +72,10 @@
     }
 
     #clock::before {
+        display: none;
+    }
+
+    .clock--secondary {
         display: none;
     }
 }

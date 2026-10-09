@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/log/v2"
 	"github.com/damongolding/immich-kiosk/internal/kiosk"
@@ -581,6 +582,23 @@ func checkSchema(config map[string]any, level string) bool {
 	}
 
 	return true
+}
+
+// checkSecondaryClock validates the secondary clock timezone and fills in a default label
+func (c *Config) checkSecondaryClock() {
+	c.SecondaryClockTimezone = strings.TrimSpace(c.SecondaryClockTimezone)
+	if c.SecondaryClockTimezone == "" {
+		return
+	}
+	if _, err := time.LoadLocation(c.SecondaryClockTimezone); err != nil {
+		log.Warn("Invalid secondary_clock_timezone, disabling secondary clock", "value", c.SecondaryClockTimezone, "err", err)
+		c.SecondaryClockTimezone = ""
+		return
+	}
+	if strings.TrimSpace(c.SecondaryClockLabel) == "" {
+		city := c.SecondaryClockTimezone[strings.LastIndex(c.SecondaryClockTimezone, "/")+1:]
+		c.SecondaryClockLabel = strings.ReplaceAll(city, "_", " ")
+	}
 }
 
 // checkBurnIn validates burn-in prevention configuration values
