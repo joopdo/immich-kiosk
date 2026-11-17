@@ -63,9 +63,10 @@ const (
 	systemdCredPasswordFileEnv      = "kiosk_password_file"
 	systemdCredWeatherAPIKeyFileEnv = "kiosk_weather_api_key_file"
 
-	apiKeyFileEnv        = "KIOSK_IMMICH_API_KEY_FILE"
-	passwordFileEnv      = "KIOSK_PASSWORD_FILE"
-	weatherAPIKeyFileEnv = "KIOSK_WEATHER_API_KEY_FILE"
+	apiKeyFileEnv          = "KIOSK_IMMICH_API_KEY_FILE"
+	nowPlayingTokenFileEnv = "KIOSK_NOW_PLAYING_TOKEN_FILE"
+	passwordFileEnv        = "KIOSK_PASSWORD_FILE"
+	weatherAPIKeyFileEnv   = "KIOSK_WEATHER_API_KEY_FILE"
 )
 
 type OfflineMode struct {
@@ -165,6 +166,25 @@ type KioskSettings struct {
 	DebugVerbose bool `json:"debugVerbose" yaml:"debug_verbose" mapstructure:"debug_verbose" default:"false"`
 
 	DemoMode bool `json:"-" yaml:"-" mapstructure:"demo_mode" default:"false"`
+}
+
+// NowPlayingConfig configures the "now playing" corner. The HA token is never read from
+// config.yaml: it comes from the file named by KIOSK_NOW_PLAYING_TOKEN_FILE (docker secret).
+type NowPlayingConfig struct {
+	// HAURL base URL of Home Assistant, e.g. http://homeassistant.local:8123
+	HAURL string `json:"-" yaml:"ha_url" mapstructure:"ha_url" default:"" redact:"true"`
+	// Entity HA entity with the now-playing contract (see internal/nowplaying)
+	Entity string `json:"-" yaml:"entity" mapstructure:"entity" default:"sensor.photoframe_now_playing"`
+	// Interval refresh interval in seconds (min 5)
+	Interval int `json:"-" yaml:"interval" mapstructure:"interval" default:"15"`
+	// Timezone IANA zone for the "ends at" time. Empty = container local time.
+	Timezone string `json:"-" yaml:"timezone" mapstructure:"timezone" default:""`
+	// Token HA long-lived access token, loaded from KIOSK_NOW_PLAYING_TOKEN_FILE only
+	Token string `json:"-" msgpack:"-" yaml:"-" mapstructure:"-" redact:"true"`
+	// Enabled set by validation when url, entity and token are all present
+	Enabled bool `json:"-" yaml:"-" mapstructure:"-"`
+	// Location parsed Timezone
+	Location *time.Location `json:"-" yaml:"-" mapstructure:"-"`
 }
 
 type WeatherConfig struct {
@@ -497,6 +517,9 @@ type Config struct {
 
 	Weather WeatherConfig `json:"weather" yaml:"weather" mapstructure:"weather"`
 
+	// NowPlaying shows what a Home Assistant media entity is playing in the bottom-right corner.
+	NowPlaying NowPlayingConfig `json:"-" yaml:"now_playing" mapstructure:"now_playing"`
+
 	// RedirectsMap provides O(1) lookup of redirect URLs by their friendly name
 	RedirectsMap map[string]RedirectItem `json:"-" yaml:"-"`
 	// Redirects defines a list of URL redirections with friendly names
@@ -741,6 +764,7 @@ func (c *Config) Load() error {
 	c.checkOffline()
 	c.checkBurnIn()
 	c.checkSecondaryClock()
+	c.checkNowPlaying()
 	c.checkFilterNewest()
 
 	return nil

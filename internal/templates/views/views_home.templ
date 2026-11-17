@@ -79,6 +79,9 @@ templ Home(viewData common.ViewData, secret string) {
 							}
 						</div>
 					</section>
+					if viewData.NowPlaying.Enabled {
+						@partials.NowPlayingContainer(viewData.NowPlaying.Interval)
+					}
 				}
 				if !viewData.DisableNavigation {
 					@partials.Menu(viewData, viewData.Queries, secret)

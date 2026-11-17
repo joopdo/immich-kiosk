@@ -129,6 +129,13 @@ func (c *Config) checkSecrets() {
 		}
 	}
 
+	if tokenFile := os.Getenv(nowPlayingTokenFileEnv); tokenFile != "" {
+		if token, ok := loadSecretFromFile(filepath.Clean(tokenFile)); ok {
+			log.Info("Loaded now playing token", "source", "docker secret")
+			c.NowPlaying.Token = token
+		}
+	}
+
 	weatherAPIFile := os.Getenv(weatherAPIKeyFileEnv)
 	if weatherAPIFile != "" {
 		weatherAPIFile = filepath.Clean(weatherAPIFile)
@@ -753,4 +760,37 @@ func (c *Config) checkIDs(key string, s []string, allowSuffix, allowKeywords boo
 			log.Warn("Invalid ID format", "type", key, "value", id)
 		}
 	}
+}
+
+// checkNowPlaying enables the now-playing corner only when it is fully configured.
+func (c *Config) checkNowPlaying() {
+	np := &c.NowPlaying
+	np.HAURL = strings.TrimRight(strings.TrimSpace(np.HAURL), "/")
+	np.Entity = strings.TrimSpace(np.Entity)
+	np.Enabled = false
+	np.Location = time.Local
+
+	if np.HAURL == "" {
+		return
+	}
+	if u, err := url.Parse(np.HAURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		log.Warn("Invalid now_playing.ha_url, disabling now playing", "value", np.HAURL)
+		return
+	}
+	if np.Entity == "" || np.Token == "" {
+		log.Warn("now_playing needs an entity and a token (" + nowPlayingTokenFileEnv + "), disabling now playing")
+		return
+	}
+	if np.Interval < 5 {
+		np.Interval = 5
+	}
+	if np.Timezone != "" {
+		loc, err := time.LoadLocation(np.Timezone)
+		if err != nil {
+			log.Warn("Invalid now_playing.timezone, using local time", "value", np.Timezone, "err", err)
+		} else {
+			np.Location = loc
+		}
+	}
+	np.Enabled = true
 }

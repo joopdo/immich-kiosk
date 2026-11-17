@@ -1,0 +1,105 @@
+/* --- now playing (bottom-right) ---
+   Mirrors the clock: white text, soft shadow, no box. Static by design: no
+   transitions or keyframes, the server re-renders a snapshot every few seconds. */
+#now-playing {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: var(--z-clock);
+    max-width: 40vw;
+    padding: 1rem 1.5rem;
+    color: #fff;
+    text-align: right;
+    text-shadow: 0 0 1.25rem rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+}
+
+#now-playing:empty {
+    display: none;
+}
+
+.now-playing {
+    display: grid;
+    justify-items: end;
+    gap: 0.35rem;
+    opacity: 0.9;
+}
+
+.now-playing--paused {
+    opacity: 0.5;
+}
+
+.now-playing--title {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    max-width: 100%;
+    font-size: 2rem;
+    line-height: 1.15;
+}
+
+.now-playing--title span {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.now-playing--subtitle {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: 1.25rem;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    opacity: 0.8;
+}
+
+.now-playing--icon {
+    flex: none;
+    width: 0.8em;
+    height: 0.8em;
+    fill: currentColor;
+    filter: drop-shadow(0 0 0.4rem rgba(0, 0, 0, 0.6));
+}
+
+.now-playing--bar {
+    width: 18rem;
+    max-width: 100%;
+    height: 0.3rem;
+    margin-top: 0.25rem;
+    overflow: hidden;
+    border-radius: 0.15rem;
+    background: rgba(255, 255, 255, 0.25);
+    box-shadow: 0 0 0.75rem rgba(0, 0, 0, 0.35);
+}
+
+.now-playing--bar-fill {
+    height: 100%;
+    border-radius: inherit;
+    background: #fff;
+}
+
+.now-playing--times {
+    display: flex;
+    gap: 1.25rem;
+    font-size: 1.25rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.now-playing--ends {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.burn-in-dim #now-playing {
+    opacity: var(--burn-in-opacity);
+}
+
+.polling-paused.more-info #now-playing,
+.polling-paused.redirects-open #now-playing {
+    opacity: 0.2;
+}
+
+.sleep #now-playing {
+    display: none;
+}

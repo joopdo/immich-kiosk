@@ -232,6 +232,8 @@ func main() {
 
 	e.POST("/weather", routes.Weather(baseConfig))
 
+	e.POST("/now-playing", routes.NowPlaying(baseConfig))
+
 	e.GET("/sleep", routes.Sleep(baseConfig))
 
 	e.Match([]string{http.MethodGet, http.MethodPost}, "/cache/flush", routes.FlushCache(baseConfig, c))

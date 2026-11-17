@@ -46,6 +46,16 @@
     "secondary_clock_label": {
       "type": "string"
     },
+    "now_playing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ha_url": { "type": "string" },
+        "entity": { "type": "string" },
+        "interval": { "type": "integer", "minimum": 5 },
+        "timezone": { "type": "string" }
+      }
+    },
     "duration": {
       "type": "integer"
     },
