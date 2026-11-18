@@ -37,6 +37,14 @@ func logNowPlayingErr(err error) {
 	nowPlayingLastErr = msg
 }
 
+var (
+	nowPlayingArt      nowplaying.ArtTracker
+	nowPlayingArtMu    sync.Mutex
+	nowPlayingArtPath  string
+	nowPlayingArtBytes []byte
+	nowPlayingArtType  string
+)
+
 // NowPlaying renders the now-playing corner. It always answers 200 (empty body when
 // there is nothing to show) because htmx does not swap on 204, which would leave a
 // stale title on screen.
@@ -60,7 +68,37 @@ func NowPlaying(baseConfig *config.Config) echo.HandlerFunc {
 		if fetchErr != nil {
 			info = nil
 		}
+		window := time.Duration(np.ArtSeconds) * time.Second
+		if np.ArtSeconds < 0 {
+			window = -1
+		}
+		nowPlayingArt.Update(info, time.Now(), window)
 
 		return Render(c, http.StatusOK, partials.NowPlaying(info, requestData.RequestConfig.TimeFormat, np.Location))
+	}
+}
+
+// NowPlayingArt serves the current artwork. The path comes from the last HA state
+// (never from the request), so this cannot be used to fetch other HA URLs.
+func NowPlayingArt(baseConfig *config.Config) echo.HandlerFunc {
+	return func(c *echo.Context) error {
+		np := baseConfig.NowPlaying
+		path := nowPlayingArt.Picture()
+		if !np.Enabled || path == "" {
+			return c.NoContent(http.StatusNotFound)
+		}
+
+		nowPlayingArtMu.Lock()
+		defer nowPlayingArtMu.Unlock()
+		if path != nowPlayingArtPath {
+			b, ct, err := nowplaying.FetchArt(c.Request().Context(), np.HAURL, np.Token, path)
+			if err != nil {
+				log.Warn("now playing: artwork", "err", err)
+				return c.NoContent(http.StatusNotFound)
+			}
+			nowPlayingArtPath, nowPlayingArtBytes, nowPlayingArtType = path, b, ct
+		}
+		c.Response().Header().Set("Cache-Control", "private, max-age=86400")
+		return c.Blob(http.StatusOK, nowPlayingArtType, nowPlayingArtBytes)
 	}
 }

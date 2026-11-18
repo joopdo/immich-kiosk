@@ -97,3 +97,61 @@ func TestFetch(t *testing.T) {
 		t.Error("want error when not configured")
 	}
 }
+
+func TestArtTracker(t *testing.T) {
+	var tr ArtTracker
+	t0 := time.Date(2026, 11, 18, 20, 0, 0, 0, time.UTC)
+	info := func(state string) *Info {
+		return &Info{State: state, Title: "Dune", Picture: "/api/media_player_proxy/media_player.kodi?x=1"}
+	}
+	w := 60 * time.Second
+
+	i := info(StatePlaying)
+	tr.Update(i, t0, w)
+	if !i.ShowArt {
+		t.Error("new title should show art")
+	}
+	i = info(StatePlaying)
+	tr.Update(i, t0.Add(61*time.Second), w)
+	if i.ShowArt {
+		t.Error("art should hide after the window")
+	}
+	i = info(StatePaused)
+	tr.Update(i, t0.Add(90*time.Second), w)
+	if i.ShowArt {
+		t.Error("pausing should not bring the art back")
+	}
+	i = info(StatePlaying)
+	tr.Update(i, t0.Add(120*time.Second), w)
+	if !i.ShowArt {
+		t.Error("resume should show art again")
+	}
+	i = info(StatePlaying)
+	tr.Update(i, t0.Add(500*time.Second), -1)
+	if !i.ShowArt {
+		t.Error("window -1 = always")
+	}
+	i = info(StatePlaying)
+	tr.Update(i, t0, 0)
+	if i.ShowArt {
+		t.Error("window 0 = never")
+	}
+	tr.Update(nil, t0, w)
+	if tr.Picture() != "" {
+		t.Error("nil should clear the picture")
+	}
+}
+
+func TestArtPathAllowed(t *testing.T) {
+	for p, want := range map[string]bool{
+		"/api/media_player_proxy/media_player.kodirp5?token=a&cache=b": true,
+		"/api/states/sensor.x":                 false,
+		"/api/media_player_proxy/../config":    false,
+		"http://evil/api/media_player_proxy/x": false,
+		"":                                     false,
+	} {
+		if ArtPathAllowed(p) != want {
+			t.Errorf("ArtPathAllowed(%q) != %v", p, want)
+		}
+	}
+}

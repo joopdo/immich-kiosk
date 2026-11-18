@@ -3,6 +3,7 @@ package partials
 import (
 	"fmt"
 	"github.com/damongolding/immich-kiosk/internal/nowplaying"
+	"hash/fnv"
 	"time"
 )
 
@@ -28,6 +29,13 @@ func nowPlayingEndsAt(t time.Time, timeFormat string, loc *time.Location) string
 	return t.Format("15:04")
 }
 
+// nowPlayingArtURL busts the browser cache when the artwork changes.
+func nowPlayingArtURL(info *nowplaying.Info) string {
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(info.Picture))
+	return fmt.Sprintf("/now-playing/art?v=%08x", h.Sum32())
+}
+
 func nowPlayingBarWidth(info *nowplaying.Info) string {
 	return fmt.Sprintf("width:%.1f%%", info.Progress())
 }
@@ -44,17 +52,25 @@ templ nowPlayingIcon(paused bool) {
 templ NowPlaying(info *nowplaying.Info, timeFormat string, loc *time.Location) {
 	if info != nil {
 		<div class={ "now-playing", templ.KV("now-playing--paused", info.Paused()) }>
-			<div class="now-playing--title">
-				@nowPlayingIcon(info.Paused())
-				<span>{ info.Title }</span>
-			</div>
+			if info.ShowArt {
+				<img class="now-playing--art" src={ nowPlayingArtURL(info) } alt="" decoding="async"/>
+			}
+			<div class="now-playing--title"><span>{ info.Title }</span></div>
 			if info.Subtitle != "" {
 				<div class="now-playing--subtitle">{ info.Subtitle }</div>
+			}
+			if info.Duration <= 0 {
+				<div class="now-playing--times now-playing--times-live">
+					@nowPlayingIcon(info.Paused())
+				</div>
 			}
 			if info.Duration > 0 {
 				<div class="now-playing--bar"><div class="now-playing--bar-fill" style={ nowPlayingBarWidth(info) }></div></div>
 				<div class="now-playing--times">
-					<span>{ nowplaying.FormatDuration(info.Position) } / { nowplaying.FormatDuration(info.Duration) }</span>
+					<span class="now-playing--elapsed">
+						@nowPlayingIcon(info.Paused())
+						{ nowplaying.FormatDuration(info.Position) } / { nowplaying.FormatDuration(info.Duration) }
+					</span>
 					<span class="now-playing--ends">
 						<svg class="now-playing--icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16zm-1 3v5.4l4.3 2.6 1-1.7-3.3-2V7z"></path></svg>
 						{ nowPlayingEndsAt(info.EndsAt, timeFormat, loc) }

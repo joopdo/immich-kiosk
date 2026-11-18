@@ -177,6 +177,8 @@ type NowPlayingConfig struct {
 	Entity string `json:"-" yaml:"entity" mapstructure:"entity" default:"sensor.photoframe_now_playing"`
 	// Interval refresh interval in seconds (min 5)
 	Interval int `json:"-" yaml:"interval" mapstructure:"interval" default:"15"`
+	// ArtSeconds how long the artwork shows after a title starts or resumes: 0 = never, -1 = always
+	ArtSeconds int `json:"-" yaml:"art_seconds" mapstructure:"art_seconds" default:"60"`
 	// Timezone IANA zone for the "ends at" time. Empty = container local time.
 	Timezone string `json:"-" yaml:"timezone" mapstructure:"timezone" default:""`
 	// Token HA long-lived access token, loaded from KIOSK_NOW_PLAYING_TOKEN_FILE only

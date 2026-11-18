@@ -233,6 +233,7 @@ func main() {
 	e.POST("/weather", routes.Weather(baseConfig))
 
 	e.POST("/now-playing", routes.NowPlaying(baseConfig))
+	e.GET("/now-playing/art", routes.NowPlayingArt(baseConfig))
 
 	e.GET("/sleep", routes.Sleep(baseConfig))
 

@@ -53,6 +53,7 @@
         "ha_url": { "type": "string" },
         "entity": { "type": "string" },
         "interval": { "type": "integer", "minimum": 5 },
+        "art_seconds": { "type": "integer", "minimum": -1 },
         "timezone": { "type": "string" }
       }
     },

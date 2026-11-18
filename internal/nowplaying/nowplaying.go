@@ -14,9 +14,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -35,6 +37,10 @@ type Info struct {
 	Position float64
 	// EndsAt is when playback finishes if it keeps playing from now. Zero if Duration is unknown.
 	EndsAt time.Time
+	// Picture is the HA-relative artwork path (media_player entity_picture), "" if none.
+	Picture string
+	// ShowArt is set by ArtTracker: artwork is shown for a while after start/resume.
+	ShowArt bool
 }
 
 // Paused reports whether playback is paused.
@@ -57,6 +63,7 @@ type haState struct {
 		Duration          *float64 `json:"duration"`
 		Position          *float64 `json:"position"`
 		PositionUpdatedAt string   `json:"position_updated_at"`
+		Picture           string   `json:"picture"`
 	} `json:"attributes"`
 }
 
@@ -110,6 +117,9 @@ func fromState(s haState, now time.Time) *Info {
 	}
 
 	info := &Info{State: s.State, Title: title, Subtitle: strings.TrimSpace(a.Subtitle)}
+	if ArtPathAllowed(a.Picture) {
+		info.Picture = a.Picture
+	}
 	if a.Duration != nil && *a.Duration > 0 {
 		info.Duration = *a.Duration
 	}
@@ -139,4 +149,83 @@ func fromState(s haState, now time.Time) *Info {
 func FormatDuration(seconds float64) string {
 	m := int(seconds) / 60
 	return fmt.Sprintf("%d:%02d", m/60, m%60)
+}
+
+// ArtPathAllowed limits artwork fetches to HA's media proxy paths, so the kiosk can
+// never be used to fetch arbitrary HA API URLs.
+func ArtPathAllowed(p string) bool {
+	return strings.HasPrefix(p, "/api/media_player_proxy/") && !strings.Contains(p, "..")
+}
+
+// ArtTracker decides when the artwork is visible: for window after a new title
+// starts or playback resumes. window < 0 = always, 0 = never.
+type ArtTracker struct {
+	mu        sync.Mutex
+	key       string
+	lastState string
+	since     time.Time
+	picture   string
+}
+
+// Update marks info.ShowArt and remembers the current picture path.
+func (t *ArtTracker) Update(info *Info, now time.Time, window time.Duration) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if info == nil {
+		t.key, t.lastState, t.picture = "", "", ""
+		return
+	}
+	key := info.Title + "\x00" + info.Subtitle
+	if key != t.key || (info.State == StatePlaying && t.lastState != StatePlaying) {
+		t.since = now
+	}
+	t.key, t.lastState, t.picture = key, info.State, info.Picture
+	switch {
+	case info.Picture == "" || window == 0:
+		info.ShowArt = false
+	case window < 0:
+		info.ShowArt = true
+	default:
+		info.ShowArt = now.Sub(t.since) < window
+	}
+}
+
+// Picture returns the last seen artwork path ("" if none).
+func (t *ArtTracker) Picture() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.picture
+}
+
+// FetchArt downloads the artwork for path (must pass ArtPathAllowed) from HA.
+func FetchArt(ctx context.Context, haURL, token, path string) ([]byte, string, error) {
+	if !ArtPathAllowed(path) {
+		return nil, "", errors.New("artwork path not allowed")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimRight(haURL, "/")+path, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", fmt.Errorf("HA returned %s for artwork", resp.Status)
+	}
+	ct := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "image/") {
+		return nil, "", fmt.Errorf("artwork has content type %q", ct)
+	}
+	const maxArt = 8 << 20
+	b, err := io.ReadAll(io.LimitReader(resp.Body, maxArt+1))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(b) > maxArt {
+		return nil, "", errors.New("artwork too large")
+	}
+	return b, ct, nil
 }
