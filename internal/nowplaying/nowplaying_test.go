@@ -155,3 +155,27 @@ func TestArtPathAllowed(t *testing.T) {
 		}
 	}
 }
+
+func TestFetchArtSniffsOctetStream(t *testing.T) {
+	png := []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR")
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		if r.URL.Path == "/api/media_player_proxy/media_player.kodi" {
+			_, _ = w.Write(png)
+			return
+		}
+		_, _ = w.Write([]byte("<html>not an image</html>"))
+	}))
+	defer srv.Close()
+
+	_, ct, err := FetchArt(t.Context(), srv.URL, "tok", "/api/media_player_proxy/media_player.kodi")
+	if err != nil || ct != "image/png" {
+		t.Fatalf("FetchArt = %q, %v", ct, err)
+	}
+	if _, _, err := FetchArt(t.Context(), srv.URL, "tok", "/api/media_player_proxy/other"); err == nil {
+		t.Error("non-image body should be rejected")
+	}
+	if _, _, err := FetchArt(t.Context(), srv.URL, "tok", "/api/states/x"); err == nil {
+		t.Error("non-proxy path should be rejected")
+	}
+}

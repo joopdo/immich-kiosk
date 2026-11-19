@@ -45,6 +45,13 @@ var (
 	nowPlayingArtType  string
 )
 
+// nowPlayingEmpty clears the corner. An empty 200 body makes the gzip middleware
+// write the header twice ("response already written" every poll), so send a
+// comment instead; #now-playing:empty still matches (comments do not count).
+func nowPlayingEmpty(c *echo.Context) error {
+	return c.HTML(http.StatusOK, "<!-- now playing: nothing -->")
+}
+
 // NowPlaying renders the now-playing corner. It always answers 200 (empty body when
 // there is nothing to show) because htmx does not swap on 204, which would leave a
 // stale title on screen.
@@ -60,7 +67,7 @@ func NowPlaying(baseConfig *config.Config) echo.HandlerFunc {
 
 		np := requestData.RequestConfig.NowPlaying
 		if !np.Enabled {
-			return Render(c, http.StatusOK, partials.NowPlaying(nil, "", nil))
+			return nowPlayingEmpty(c)
 		}
 
 		info, fetchErr := nowplaying.Fetch(c.Request().Context(), np.HAURL, np.Token, np.Entity, time.Now())
@@ -74,6 +81,9 @@ func NowPlaying(baseConfig *config.Config) echo.HandlerFunc {
 		}
 		nowPlayingArt.Update(info, time.Now(), window)
 
+		if info == nil {
+			return nowPlayingEmpty(c)
+		}
 		return Render(c, http.StatusOK, partials.NowPlaying(info, requestData.RequestConfig.TimeFormat, np.Location))
 	}
 }

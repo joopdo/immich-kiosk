@@ -215,10 +215,6 @@ func FetchArt(ctx context.Context, haURL, token, path string) ([]byte, string, e
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", fmt.Errorf("HA returned %s for artwork", resp.Status)
 	}
-	ct := resp.Header.Get("Content-Type")
-	if !strings.HasPrefix(ct, "image/") {
-		return nil, "", fmt.Errorf("artwork has content type %q", ct)
-	}
 	const maxArt = 8 << 20
 	b, err := io.ReadAll(io.LimitReader(resp.Body, maxArt+1))
 	if err != nil {
@@ -226,6 +222,14 @@ func FetchArt(ctx context.Context, haURL, token, path string) ([]byte, string, e
 	}
 	if len(b) > maxArt {
 		return nil, "", errors.New("artwork too large")
+	}
+	// HA's media proxy often says application/octet-stream (Kodi thumbnails); trust the bytes.
+	ct := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "image/") {
+		ct = http.DetectContentType(b)
+	}
+	if !strings.HasPrefix(ct, "image/") {
+		return nil, "", fmt.Errorf("artwork is not an image (%q)", ct)
 	}
 	return b, ct, nil
 }
