@@ -101,40 +101,57 @@ func TestFetch(t *testing.T) {
 func TestArtTracker(t *testing.T) {
 	var tr ArtTracker
 	t0 := time.Date(2026, 11, 18, 20, 0, 0, 0, time.UTC)
-	info := func(state string) *Info {
-		return &Info{State: state, Title: "Dune", Picture: "/api/media_player_proxy/media_player.kodi?x=1"}
-	}
 	w := 60 * time.Second
+	at := func(state string, sec, pos float64) bool {
+		i := &Info{State: state, Title: "Dune", Duration: 9000, Position: pos, Picture: "/api/media_player_proxy/media_player.kodi?x=1"}
+		tr.Update(i, t0.Add(time.Duration(sec)*time.Second), w)
+		return i.ShowArt
+	}
 
-	i := info(StatePlaying)
-	tr.Update(i, t0, w)
-	if !i.ShowArt {
+	if !at(StatePlaying, 0, 100) {
 		t.Error("new title should show art")
 	}
-	i = info(StatePlaying)
-	tr.Update(i, t0.Add(61*time.Second), w)
-	if i.ShowArt {
+	// keep polling every 15 s while playing normally
+	for s := 15.0; s <= 75; s += 15 {
+		at(StatePlaying, s, 100+s)
+	}
+	if at(StatePlaying, 90, 190) {
 		t.Error("art should hide after the window")
 	}
-	i = info(StatePaused)
-	tr.Update(i, t0.Add(90*time.Second), w)
-	if i.ShowArt {
-		t.Error("pausing should not bring the art back")
+	if !at(StatePaused, 105, 190) || !at(StatePaused, 400, 190) {
+		t.Error("art shows for the whole pause")
 	}
-	i = info(StatePlaying)
-	tr.Update(i, t0.Add(120*time.Second), w)
-	if !i.ShowArt {
+	if !at(StatePlaying, 415, 190) {
 		t.Error("resume should show art again")
 	}
-	i = info(StatePlaying)
-	tr.Update(i, t0.Add(500*time.Second), -1)
+	for s := 430.0; s <= 490; s += 15 {
+		at(StatePlaying, s, 190+s-415)
+	}
+	if at(StatePlaying, 505, 280) {
+		t.Error("normal playback should not show art")
+	}
+	if !at(StatePlaying, 520, 2000) {
+		t.Error("a seek should show art")
+	}
+	for s := 535.0; s <= 595; s += 15 {
+		at(StatePlaying, s, 2000+s-520)
+	}
+	if at(StatePlaying, 610, 2090) {
+		t.Error("art should hide after the seek window")
+	}
+	if !at(StatePlaying, 1000, 2480) {
+		t.Error("a gap in polling (screen woke) should show art")
+	}
+
+	i := &Info{State: StatePlaying, Title: "Dune", Picture: "/api/media_player_proxy/x"}
+	tr.Update(i, t0.Add(5000*time.Second), -1)
 	if !i.ShowArt {
 		t.Error("window -1 = always")
 	}
-	i = info(StatePlaying)
-	tr.Update(i, t0, 0)
+	i = &Info{State: StatePaused, Title: "Dune", Picture: "/api/media_player_proxy/x"}
+	tr.Update(i, t0.Add(5015*time.Second), 0)
 	if i.ShowArt {
-		t.Error("window 0 = never")
+		t.Error("window 0 = never, also when paused")
 	}
 	tr.Update(nil, t0, w)
 	if tr.Picture() != "" {

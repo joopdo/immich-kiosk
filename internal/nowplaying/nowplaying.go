@@ -157,15 +157,26 @@ func ArtPathAllowed(p string) bool {
 	return strings.HasPrefix(p, "/api/media_player_proxy/") && !strings.Contains(p, "..")
 }
 
-// ArtTracker decides when the artwork is visible: for window after a new title
-// starts or playback resumes. window < 0 = always, 0 = never.
+// ArtTracker decides when the artwork is visible. It shows for window after:
+//   - a new title starts, or playback resumes after a pause;
+//   - a seek (position jumps more than 30 s from where it should be);
+//   - the corner reappears after a gap (screen woke, page reloaded: no poll for > 1 min);
+//
+// and for the whole time playback is paused. window < 0 = always, 0 = never.
 type ArtTracker struct {
 	mu        sync.Mutex
 	key       string
 	lastState string
+	lastSeen  time.Time
+	lastPos   float64
 	since     time.Time
 	picture   string
 }
+
+const (
+	artSeekJump = 30 // seconds of position mismatch that count as a seek
+	artWakeGap  = time.Minute
+)
 
 // Update marks info.ShowArt and remembers the current picture path.
 func (t *ArtTracker) Update(info *Info, now time.Time, window time.Duration) {
@@ -176,14 +187,23 @@ func (t *ArtTracker) Update(info *Info, now time.Time, window time.Duration) {
 		return
 	}
 	key := info.Title + "\x00" + info.Subtitle
-	if key != t.key || (info.State == StatePlaying && t.lastState != StatePlaying) {
+	switch {
+	case key != t.key,
+		info.State == StatePlaying && t.lastState != StatePlaying,
+		!t.lastSeen.IsZero() && now.Sub(t.lastSeen) > artWakeGap:
 		t.since = now
+	case info.State == StatePlaying && info.Duration > 0:
+		expected := t.lastPos + now.Sub(t.lastSeen).Seconds()
+		if d := info.Position - expected; d > artSeekJump || d < -artSeekJump {
+			t.since = now
+		}
 	}
 	t.key, t.lastState, t.picture = key, info.State, info.Picture
+	t.lastSeen, t.lastPos = now, info.Position
 	switch {
 	case info.Picture == "" || window == 0:
 		info.ShowArt = false
-	case window < 0:
+	case window < 0, info.State == StatePaused:
 		info.ShowArt = true
 	default:
 		info.ShowArt = now.Sub(t.since) < window
